@@ -1,16 +1,12 @@
 
-import re
-from datetime import datetime, timezone
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
+import re
 
-app = FastAPI(
-    title="AI Voice Customer Support API",
-    version="0.3.0"
-)
+app = FastAPI(title="VoiceDesk Customer Support API")
 
+# Allow the deployed frontend to communicate with the backend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -21,138 +17,119 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-
 )
-
-ORDERS = {
-    "1001": {
-        "status": "shipped",
-        "item": "Laptop",
-        "estimated_delivery": "November 3, 2026"
-    },
-    "1002": {
-        "status": "processing",
-        "item": "Wireless headphones",
-        "estimated_delivery": "November 5, 2026"
-    },
-    "1003": {
-        "status": "delivered",
-        "item": "Keyboard",
-        "estimated_delivery": "October 29, 2026"
-    }
-}
 
 
 class ChatRequest(BaseModel):
-    message: str = Field(min_length=1, max_length=4000)
+    message: str
 
 
-class ChatResponse(BaseModel):
-    reply: str
-    intent: str
-    timestamp: str
-
-
-def respond(message: str) -> tuple[str, str]:
-
+def get_response(message: str):
     text = message.lower().strip()
+    words = set(re.findall(r"[a-z]+", text))
 
-    # Greeting
-    if re.search(r"\b(hello|hi|hey)\b", text):
-        return (
-            "Hello! Welcome to VoiceDesk customer support. "
-            "How can I help you today?",
-            "greeting"
-        )
+    if not text:
+        return {
+            "reply": "Please type a message so I can help you.",
+            "intent": "empty"
+        }
 
-    # Order tracking
-    order_match = re.search(
-        r"\b(?:order\s*)?(1001|1002|1003)\b",
-        text
-    )
+    # Greetings
+    if words.intersection({"hi", "hello", "hey", "greetings"}):
+        return {
+            "reply": "Hello! Welcome to VoiceDesk. I'm your virtual customer support assistant. How can I help you today?",
+            "intent": "greeting"
+        }
 
-    if order_match and any(word in text for word in [
-        "order", "track", "delivery", "shipped"
-    ]):
-        order_id = order_match.group(1)
-        order = ORDERS[order_id]
+    # Thanks
+    if words.intersection({"thanks", "thank", "appreciate"}):
+        return {
+            "reply": "You're very welcome! I'm happy to help. Is there anything else you'd like to know?",
+            "intent": "thanks"
+        }
 
-        return (
-            f"Your order {order_id} for {order['item']} "
-            f"is currently {order['status']}. "
-            f"Estimated delivery is {order['estimated_delivery']}.",
-            "order_tracking"
-        )
+    # Goodbye
+    if words.intersection({"bye", "goodbye", "farewell"}):
+        return {
+            "reply": "Thank you for contacting VoiceDesk! Have a wonderful day.",
+            "intent": "goodbye"
+        }
 
-    if any(word in text for word in [
-        "order", "tracking", "delivery"
-    ]):
-        return (
-            "I can check demo orders 1001, 1002 and 1003. "
-            "Please share your order number.",
-            "order_tracking"
-        )
+    # Appointment booking
+    if words.intersection({"appointment", "book", "booking", "schedule", "reservation"}):
+        return {
+            "reply": "I'd be happy to help with an appointment. Please share your preferred date and time, along with the service you need. I can collect these details, but this demo does not create an actual booking.",
+            "intent": "appointment"
+        }
 
-    # Damaged product
-    if any(word in text for word in [
-        "damaged", "broken", "defective", "not working"
-    ]):
-        return (
-            "I'm sorry your product arrived damaged. "
-            "I can help you with this. Please share your order "
-            "number and briefly describe the damage. "
-            "A support representative can then review your "
-            "replacement or refund options.",
-            "damaged_product"
-        )
+    # Cancellation or rescheduling
+    if words.intersection({"cancel", "cancellation", "reschedule", "postpone"}):
+        return {
+            "reply": "I can help you with a cancellation or rescheduling request. Please share your appointment reference and your preferred next step. This demo cannot directly modify bookings.",
+            "intent": "cancellation"
+        }
 
-    # Refund and returns
-    if any(word in text for word in [
-        "refund", "return", "money back"
-    ]):
-        return (
-            "I can help you with a refund or return request. "
-            "Please share your order number and the reason "
-            "for your request. The support team will need to "
-            "review the applicable return policy.",
-            "returns_and_refunds"
-        )
+    # Opening hours
+    if words.intersection({"hours", "timing", "timings", "open", "closed", "working"}):
+        return {
+            "reply": "Our support team is available Monday to Friday, from 9 AM to 6 PM. Weekend availability may vary. Please confirm with the business before visiting.",
+            "intent": "business_hours"
+        }
 
-    # Cancellation
-    if any(word in text for word in [
-        "cancel", "cancellation"
-    ]):
-        return (
-            "I can help you with a cancellation request. "
-            "Please share your order number. "
-            "This demo cannot cancel an actual order.",
-            "cancellation"
-        )
+    # Pricing
+    if words.intersection({"price", "pricing", "cost", "fee", "fees", "charge", "charges"}):
+        return {
+            "reply": "I'd be happy to help with pricing! Which product or service are you interested in? Exact prices depend on the service, so our team can confirm the latest quote.",
+            "intent": "pricing"
+        }
 
-    # Human handoff
-    if any(word in text for word in [
-        "human", "representative", "agent", "person"
-    ]):
-        return (
-            "Certainly! I can flag your request for human support. "
-            "This demo does not send a real handoff, but a "
-            "representative would be the next point of contact.",
-            "human_handoff"
-        )
+    # Refunds
+    if words.intersection({"refund", "money", "reimbursement", "return"}):
+        return {
+            "reply": "I understand you'd like information about a refund. Please share your order or transaction reference and a brief description of the issue. Our support team can review your request.",
+            "intent": "refund"
+        }
 
-    # General support
-    return (
-        "Thanks for contacting VoiceDesk! I can help with "
-        "order tracking, damaged products, refunds, returns "
-        "and cancellations. What would you like help with?",
-        "general_support"
-    )
+    # Technical support
+    if words.intersection({"error", "bug", "issue", "problem", "broken", "crash", "technical"}):
+        return {
+            "reply": "I'm sorry you're experiencing a technical issue. Could you describe what happened and mention any error message you received? I'll help you identify the next step.",
+            "intent": "technical_support"
+        }
+
+    # Products and services
+    if words.intersection({"service", "services", "product", "products", "offer", "provide"}):
+        return {
+            "reply": "We can help you explore our available products and services. Is there a particular service or product you'd like to know more about?",
+            "intent": "services"
+        }
+
+    # Contact information
+    if words.intersection({"contact", "email", "phone", "number", "address", "location"}):
+        return {
+            "reply": "You can reach our customer support team through the business's official contact channels. Which contact detail are you looking for: phone, email, or address?",
+            "intent": "contact"
+        }
+
+    # Human support
+    if words.intersection({"human", "agent", "representative", "person", "staff"}):
+        return {
+            "reply": "Of course! If you'd prefer to speak with a human representative, I can collect your name and a short description of your query so the support team can follow up.",
+            "intent": "human_support"
+        }
+
+    # Default response
+    return {
+        "reply": "Thanks for reaching out! I want to make sure I understand your question correctly. Could you provide a little more detail or tell me whether your query is about appointments, pricing, services, refunds, or technical support?",
+        "intent": "general_query"
+    }
 
 
 @app.get("/")
-def root():
+def home():
     return {
-        "message": "AI Voice Customer Support API is running"
+        "message": "AI Voice Customer Support API is running",
+        "mode": "smart-demo"
     }
 
 
@@ -160,17 +137,11 @@ def root():
 def health():
     return {
         "status": "ok",
-        "mode": "demo"
+        "mode": "smart-demo"
     }
 
 
-@app.post("/api/chat", response_model=ChatResponse)
+@app.post("/api/chat")
 def chat(request: ChatRequest):
-
-    reply, intent = respond(request.message)
-
-    return ChatResponse(
-        reply=reply,
-        intent=intent,
-        timestamp=datetime.now(timezone.utc).isoformat()
-    )
+    result = get_response(request.message)
+    return result
