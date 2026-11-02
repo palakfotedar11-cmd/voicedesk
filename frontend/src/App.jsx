@@ -13,7 +13,8 @@ import {
   Wifi
 } from 'lucide-react'
 
-const API_URL = 'http://127.0.0.1:8000'
+// Live Render backend
+const API_URL = 'https://voicedesk-backend-o32s.onrender.com'
 
 function clock() {
   return new Date().toLocaleTimeString([], {
@@ -40,7 +41,7 @@ export default function App() {
   const recognitionRef = useRef(null)
   const bottomRef = useRef(null)
 
-  // Check backend connection
+  // Check live backend connection
   useEffect(() => {
     fetch(`${API_URL}/health`)
       .then(response => {
@@ -48,7 +49,7 @@ export default function App() {
         return response.json()
       })
       .then(() => setApiStatus('Connected'))
-      .catch(() => setApiStatus('Offline — start backend'))
+      .catch(() => setApiStatus('Offline — check backend'))
 
     return () => {
       recognitionRef.current?.abort()
@@ -63,7 +64,7 @@ export default function App() {
     })
   }, [messages, busy])
 
-  // Send message to backend
+  // Send message to live backend
   async function sendMessage(text = input) {
     const clean = text.trim()
 
@@ -99,7 +100,7 @@ export default function App() {
 
       const data = await response.json()
 
-      setLastIntent(data.intent)
+      setLastIntent(data.intent || 'general_support')
 
       setMessages(prev => [
         ...prev,
@@ -126,7 +127,7 @@ export default function App() {
         ...prev,
         {
           role: 'assistant',
-          text: 'I could not reach the backend. Please check that the FastAPI server is running at http://127.0.0.1:8000.',
+          text: 'I could not reach the VoiceDesk server. Please try again in a moment.',
           time: clock()
         }
       ])
@@ -158,7 +159,7 @@ export default function App() {
         ...prev,
         {
           role: 'assistant',
-          text: 'Please open VoiceDesk using http://localhost:5173 to enable microphone access.',
+          text: 'Please open VoiceDesk using a secure HTTPS connection to enable microphone access.',
           time: clock()
         }
       ])
@@ -210,7 +211,7 @@ export default function App() {
       let errorMessage = `Microphone error: ${event.error}.`
 
       if (event.error === 'not-allowed') {
-        errorMessage = 'Microphone access was denied. Click the site controls icon beside the Chrome address bar, open Site settings, and allow microphone access.'
+        errorMessage = 'Microphone access was denied. Open the site settings beside the browser address bar and allow microphone access.'
       } else if (event.error === 'no-speech') {
         errorMessage = 'I could not hear anything. Please click Start listening and speak again.'
       } else if (event.error === 'network') {
@@ -476,7 +477,7 @@ export default function App() {
               <div className="composer-bottom">
                 <span>
                   <Wifi size={14} />
-                  Connected to local support API
+                  Connected to VoiceDesk API
                 </span>
 
                 <span>Demo data only</span>
